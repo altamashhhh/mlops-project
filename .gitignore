@@ -212,3 +212,8 @@ local_s3/
 
 models/
 data/
+exctl.exe
+eksctl_new.zip
+kubectl.exe
+*.zip
+*.exe
