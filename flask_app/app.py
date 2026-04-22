@@ -113,12 +113,20 @@ PREDICTION_COUNT = Counter(
 # ------------------------------------------------------------------------------------------
 # Model and vectorizer setup
 model_name = "my_model"
+# def get_latest_model_version(model_name):
+    # client = mlflow.MlflowClient()
+    # latest_version = client.get_latest_versions(model_name, stages=["Production"])
+    # if not latest_version:
+    #     latest_version = client.get_latest_versions(model_name, stages=["None"])
+    # return latest_version[0].version if latest_version else None
+
 def get_latest_model_version(model_name):
     client = mlflow.MlflowClient()
-    latest_version = client.get_latest_versions(model_name, stages=["Production"])
-    if not latest_version:
-        latest_version = client.get_latest_versions(model_name, stages=["None"])
-    return latest_version[0].version if latest_version else None
+    try:
+        model_version = client.get_model_version_by_alias(model_name, "Production")
+    except:
+        model_version = client.get_model_version_by_alias(model_name, "Staging")
+    return model_version.version if model_version else None
 
 model_version = get_latest_model_version(model_name)
 model_uri = f'models:/{model_name}/{model_version}'
@@ -144,10 +152,12 @@ def predict():
     # Clean text
     text = normalize_text(text)
     # Convert to features
+    # features = vectorizer.transform([text])
+    # features_df = pd.DataFrame(features.toarray(), columns=[str(i) for i in range(features.shape[1])])
     features = vectorizer.transform([text])
-    features_df = pd.DataFrame(features.toarray(), columns=[str(i) for i in range(features.shape[1])])
-
+    features_df = pd.DataFrame(features.toarray())
     # Predict
+    # result = model.predict(features_df)
     result = model.predict(features_df)
     prediction = result[0]
 
