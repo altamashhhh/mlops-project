@@ -33,6 +33,9 @@ from src.logger import logging
 
 # Below code block is for local use
 # -------------------------------------------------------------------------------------
+
+os.environ["IMBD_PROJECT"] = os.environ.get("IMBD_PROJECT", "")
+
 mlflow.set_tracking_uri('https://dagshub.com/altamashdsa99/mlops-project.mlflow')
 dagshub.init(repo_owner='altamashdsa99', repo_name='mlops-project', mlflow=True)
 # -------------------------------------------------------------------------------------
