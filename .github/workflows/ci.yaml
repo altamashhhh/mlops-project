@@ -29,6 +29,6 @@ jobs:
 
       - name: run pipeline
         env:
-          CAPSTONE_TEST: ${{ secrets.IMBD_PROJECT}}
+            CAPSTONE_TEST: ${{ secrets.IMBD_PROJECT }}
         run: |
           dvc repro
