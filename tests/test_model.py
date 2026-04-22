@@ -39,10 +39,12 @@ class TestModelLoading(unittest.TestCase):
         cls.holdout_data = pd.read_csv('data/processed/test_bow.csv')
 
     @staticmethod
-    def get_latest_model_version(model_name, stage="Staging"):
+    def get_latest_model_version(model_name, alias ="Staging"):
         client = mlflow.MlflowClient()
-        latest_version = client.get_latest_versions(model_name, stages=[stage])
-        return latest_version[0].version if latest_version else None
+        # latest_version = client.get_latest_versions(model_name, stages=[stage])
+        # return latest_version[0].version if latest_version else None
+        model_version = client.get_model_version_by_alias(model_name, alias)
+        return model_version.version if model_version else None
 
     def test_model_loaded_properly(self):
         self.assertIsNotNone(self.new_model)
@@ -69,7 +71,8 @@ class TestModelLoading(unittest.TestCase):
         y_holdout = self.holdout_data.iloc[:,-1]
 
         # Predict using the new model
-        y_pred_new = self.new_model.predict(X_holdout)
+        # y_pred_new = self.new_model.predict(X_holdout)
+        y_pred_new = self.new_model.predict(pd.DataFrame(X_holdout.values))
 
         # Calculate performance metrics for the new model
         accuracy_new = accuracy_score(y_holdout, y_pred_new)
