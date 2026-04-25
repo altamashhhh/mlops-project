@@ -2,7 +2,8 @@
 import numpy as np
 import pandas as pd
 pd.set_option('future.no_silent_downcasting', True)
-
+import kagglehub
+import shutil
 import os
 import sys
 from sklearn.model_selection import train_test_split
@@ -77,9 +78,10 @@ def main():
         test_size = params['data_ingestion']['test_size']
         # test_size = 0.2
         
-        df = load_data(data_url='https://raw.githubusercontent.com/vikashishere/Datasets/refs/heads/main/data.csv')
+        # df = load_data(data_url='https://raw.githubusercontent.com/vikashishere/Datasets/refs/heads/main/data.csv')
        
-
+        path = kagglehub.dataset_download("lakshmi25npathi/imdb-dataset-of-50k-movie-reviews")
+        df = load_data(data_url=f"{path}/IMDB Dataset.csv")
 
 
         final_df = preprocess_data(df)

@@ -217,3 +217,5 @@ eksctl_new.zip
 kubectl.exe
 *.zip
 *.exe
+
+ check_model.py
