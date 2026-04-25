@@ -23,10 +23,3 @@ for review in test_reviews:
     print(f"\nReview: {review}")
     print(f"Prediction: {pred[0]} | Probability: {proba}")
 
-df = pd.read_csv('https://raw.githubusercontent.com/vikashishere/Datasets/refs/heads/main/data.csv')
-print('Total rows:', len(df))
-print('Columns:', df.columns.tolist())
-print('Sentiment distribution:')
-print(df['sentiment'].value_counts())
-print('Sample data:')
-print(df.head())
