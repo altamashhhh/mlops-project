@@ -1,179 +1,97 @@
-from flask import Flask, render_template, request
-import mlflow
-import pickle
-import os
-import pandas as pd
-from prometheus_client import Counter, Histogram, generate_latest, CollectorRegistry, CONTENT_TYPE_LATEST
-import time
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
-import string
-import re
-import dagshub
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from uvicorn import run as app_run
+from typing import Optional
 
-import warnings
-warnings.simplefilter("ignore", UserWarning)
-warnings.filterwarnings("ignore")
+from src.constants import APP_HOST, APP_PORT
+from src.pipline.prediction_pipeline import VehicleData, VehicleDataClassifier
+from src.pipline.training_pipeline import TrainPipeline
 
-def lemmatization(text):
-    """Lemmatize the text."""
-    lemmatizer = WordNetLemmatizer()
-    text = text.split()
-    text = [lemmatizer.lemmatize(word) for word in text]
-    return " ".join(text)
+app = FastAPI()
 
-def remove_stop_words(text):
-    """Remove stop words from the text."""
-    stop_words = set(stopwords.words("english"))
-    text = [word for word in str(text).split() if word not in stop_words]
-    return " ".join(text)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory='templates')
 
-def removing_numbers(text):
-    """Remove numbers from the text."""
-    text = ''.join([char for char in text if not char.isdigit()])
-    return text
+origins = ["*"]
 
-def lower_case(text):
-    """Convert text to lower case."""
-    text = text.split()
-    text = [word.lower() for word in text]
-    return " ".join(text)
-
-def removing_punctuations(text):
-    """Remove punctuations from the text."""
-    text = re.sub('[%s]' % re.escape(string.punctuation), ' ', text)
-    text = text.replace('؛', "")
-    text = re.sub('\s+', ' ', text).strip()
-    return text
-
-def removing_urls(text):
-    """Remove URLs from the text."""
-    url_pattern = re.compile(r'https?://\S+|www\.\S+')
-    return url_pattern.sub(r'', text)
-
-def remove_small_sentences(df):
-    """Remove sentences with less than 3 words."""
-    for i in range(len(df)):
-        if len(df.text.iloc[i].split()) < 3:
-            df.text.iloc[i] = np.nan
-
-def normalize_text(text):
-    text = lower_case(text)
-    text = remove_stop_words(text)
-    text = removing_numbers(text)
-    text = removing_punctuations(text)
-    text = removing_urls(text)
-    text = lemmatization(text)
-
-    return text
-
-# Below code block is for local use
-# -------------------------------------------------------------------------------------
-# mlflow.set_tracking_uri('https://dagshub.com/altamashdsa99/mlops-project.mlflow')
-# dagshub.init(repo_owner='altamashdsa99', repo_name='mlops-project', mlflow=True)
-# -------------------------------------------------------------------------------------
-
-# Below code block is for production use
-# -------------------------------------------------------------------------------------
-# Set up DagsHub credentials for MLflow tracking
-dagshub_token = os.getenv("CAPSTONE_TEST")
-if not dagshub_token:
-    raise EnvironmentError("CAPSTONE_TEST environment variable is not set")
-
-os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
-os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
-
-dagshub_url = "https://dagshub.com"
-repo_owner = "altamashdsa99"
-repo_name = "mlops-project"
-# Set up MLflow tracking URI
-mlflow.set_tracking_uri(f'{dagshub_url}/{repo_owner}/{repo_name}.mlflow')
-# -------------------------------------------------------------------------------------
-
-
-# Initialize Flask app
-app = Flask(__name__)
-
-# from prometheus_client import CollectorRegistry
-
-# Create a custom registry
-registry = CollectorRegistry()
-
-# Define your custom metrics using this registry
-REQUEST_COUNT = Counter(
-    "app_request_count", "Total number of requests to the app", ["method", "endpoint"], registry=registry
-)
-REQUEST_LATENCY = Histogram(
-    "app_request_latency_seconds", "Latency of requests in seconds", ["endpoint"], registry=registry
-)
-PREDICTION_COUNT = Counter(
-    "model_prediction_count", "Count of predictions for each class", ["prediction"], registry=registry
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ------------------------------------------------------------------------------------------
-# Model and vectorizer setup
-model_name = "my_model"
-# def get_latest_model_version(model_name):
-    # client = mlflow.MlflowClient()
-    # latest_version = client.get_latest_versions(model_name, stages=["Production"])
-    # if not latest_version:
-    #     latest_version = client.get_latest_versions(model_name, stages=["None"])
-    # return latest_version[0].version if latest_version else None
+class DataForm:
+    def __init__(self, request: Request):
+        self.request: Request = request
+        self.Gender: Optional[int] = None
+        self.Age: Optional[int] = None
+        self.Driving_License: Optional[int] = None
+        self.Region_Code: Optional[float] = None
+        self.Previously_Insured: Optional[int] = None
+        self.Annual_Premium: Optional[float] = None
+        self.Policy_Sales_Channel: Optional[float] = None
+        self.Vintage: Optional[int] = None
+        self.Vehicle_Age_lt_1_Year: Optional[int] = None
+        self.Vehicle_Age_gt_2_Years: Optional[int] = None
+        self.Vehicle_Damage_Yes: Optional[int] = None
 
-def get_latest_model_version(model_name):
-    client = mlflow.MlflowClient()
+    async def get_vehicle_data(self):
+        form = await self.request.form()
+        self.Gender = form.get("Gender")
+        self.Age = form.get("Age")
+        self.Driving_License = form.get("Driving_License")
+        self.Region_Code = form.get("Region_Code")
+        self.Previously_Insured = form.get("Previously_Insured")
+        self.Annual_Premium = form.get("Annual_Premium")
+        self.Policy_Sales_Channel = form.get("Policy_Sales_Channel")
+        self.Vintage = form.get("Vintage")
+        self.Vehicle_Age_lt_1_Year = form.get("Vehicle_Age_lt_1_Year")
+        self.Vehicle_Age_gt_2_Years = form.get("Vehicle_Age_gt_2_Years")
+        self.Vehicle_Damage_Yes = form.get("Vehicle_Damage_Yes")
+
+@app.get("/", tags=["authentication"])
+async def index(request: Request):
+    return templates.TemplateResponse("vehicledata.html", {"request": request, "context": None})
+
+@app.get("/train")
+async def trainRouteClient():
     try:
-        model_version = client.get_model_version_by_alias(model_name, "Production")
-    except:
-        model_version = client.get_model_version_by_alias(model_name, "Staging")
-    return model_version.version if model_version else None
+        train_pipeline = TrainPipeline()
+        train_pipeline.run_pipeline()
+        return Response("Training successful!!!")
+    except Exception as e:
+        return Response(f"Error Occurred! {e}")
 
-model_version = get_latest_model_version(model_name)
-model_uri = f'models:/{model_name}/{model_version}'
-print(f"Fetching model from: {model_uri}")
-model = mlflow.pyfunc.load_model(model_uri)
-vectorizer = pickle.load(open('models/vectorizer.pkl', 'rb'))
-
-# Routes
-@app.route("/")
-def home():
-    REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
-    start_time = time.time()
-    response = render_template("index.html", result=None)
-    REQUEST_LATENCY.labels(endpoint="/").observe(time.time() - start_time)
-    return response
-
-@app.route("/predict", methods=["POST"])
-def predict():
-    REQUEST_COUNT.labels(method="POST", endpoint="/predict").inc()
-    start_time = time.time()
-
-    text = request.form["text"]
-    # Clean text
-    text = normalize_text(text)
-    # Convert to features
-    # features = vectorizer.transform([text])
-    # features_df = pd.DataFrame(features.toarray(), columns=[str(i) for i in range(features.shape[1])])
-    features = vectorizer.transform([text])
-    features_df = pd.DataFrame(features.toarray())
-    # Predict
-    # result = model.predict(features_df)
-    result = model.predict(features_df)
-    prediction = result[0]
-
-    # Increment prediction count metric
-    PREDICTION_COUNT.labels(prediction=str(prediction)).inc()
-
-    # Measure latency
-    REQUEST_LATENCY.labels(endpoint="/predict").observe(time.time() - start_time)
-
-    return render_template("index.html", result=prediction)
-
-@app.route("/metrics", methods=["GET"])
-def metrics():
-    """Expose only custom Prometheus metrics."""
-    return generate_latest(registry), 200, {"Content-Type": CONTENT_TYPE_LATEST}
+@app.post("/")
+async def predictRouteClient(request: Request):
+    try:
+        form = DataForm(request)
+        await form.get_vehicle_data()
+        vehicle_data = VehicleData(
+            Gender=form.Gender,
+            Age=form.Age,
+            Driving_License=form.Driving_License,
+            Region_Code=form.Region_Code,
+            Previously_Insured=form.Previously_Insured,
+            Annual_Premium=form.Annual_Premium,
+            Policy_Sales_Channel=form.Policy_Sales_Channel,
+            Vintage=form.Vintage,
+            Vehicle_Age_lt_1_Year=form.Vehicle_Age_lt_1_Year,
+            Vehicle_Age_gt_2_Years=form.Vehicle_Age_gt_2_Years,
+            Vehicle_Damage_Yes=form.Vehicle_Damage_Yes
+        )
+        vehicle_df = vehicle_data.get_vehicle_input_data_frame()
+        model_predictor = VehicleDataClassifier()
+        value = model_predictor.predict(dataframe=vehicle_df)[0]
+        status = "Response-Yes" if value == 1 else "Response-No"
+        return templates.TemplateResponse("vehicledata.html", {"request": request, "context": status})
+    except Exception as e:
+        return {"status": False, "error": f"{e}"}
 
 if __name__ == "__main__":
-    # app.run(debug=True) # for local use
-    app.run(debug=True, host="0.0.0.0", port=5000)  # Accessible from outside Docker
+    app_run(app, host=APP_HOST, port=APP_PORT)

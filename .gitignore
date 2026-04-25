@@ -219,3 +219,4 @@ kubectl.exe
 *.exe
 
 check_model.py
+projectflow.txt
